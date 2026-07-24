@@ -5,6 +5,7 @@ using UnityEngine.EventSystems;
 public class DraggableBlock : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
 {
     public int[,] shape;
+    public Sprite blockSprite;
     public float cellSize = 80f;
 
     private RectTransform rect;
@@ -18,9 +19,10 @@ public class DraggableBlock : MonoBehaviour, IBeginDragHandler, IDragHandler, IE
         canvasGroup = gameObject.AddComponent<CanvasGroup>();
     }
 
-    public void SetShape(int[,] newShape)
+    public void SetShape(int[,] newShape, Sprite sprite)
     {
         shape = newShape;
+        blockSprite = sprite;
         DrawShape();
     }
 
@@ -29,13 +31,10 @@ public class DraggableBlock : MonoBehaviour, IBeginDragHandler, IDragHandler, IE
         int width = shape.GetLength(0);
         int height = shape.GetLength(1);
 
-        // Size the container
         rect.sizeDelta = new Vector2(width * cellSize, height * cellSize);
 
-        // Clear old children
         foreach (Transform child in transform) Destroy(child.gameObject);
 
-        // Draw cells
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)
@@ -52,7 +51,8 @@ public class DraggableBlock : MonoBehaviour, IBeginDragHandler, IDragHandler, IE
                     rt.anchoredPosition = new Vector2(posX, posY);
 
                     Image img = cell.AddComponent<Image>();
-                    img.color = GridManager.Instance.blockColor;
+                    img.sprite = blockSprite;
+                    img.color = Color.white;
                 }
             }
         }
@@ -70,14 +70,8 @@ public class DraggableBlock : MonoBehaviour, IBeginDragHandler, IDragHandler, IE
     public void OnDrag(PointerEventData eventData)
     {
         rect.position = Input.mousePosition;
-    }
 
-    public void OnEndDrag(PointerEventData eventData)
-    {
-        canvasGroup.blocksRaycasts = true;
-        canvasGroup.alpha = 1f;
-
-        // Try to place on grid
+        // Calculate grid position while dragging for the Ghost Preview
         Vector2 localPoint;
         RectTransformUtility.ScreenPointToLocalPointInRectangle(
             GridManager.Instance.gridBackground,
@@ -85,28 +79,48 @@ public class DraggableBlock : MonoBehaviour, IBeginDragHandler, IDragHandler, IE
             null,
             out localPoint);
 
-        // Calculate which grid cell the center of the block is over
-        float totalSize = GridManager.Instance.cellSize * 8;
-        float startX = -totalSize / 2;
-        float startY = totalSize / 2;
-
-        int gridX = Mathf.FloorToInt((localPoint.x - startX) / GridManager.Instance.cellSize);
-        int gridY = Mathf.FloorToInt((startY - localPoint.y) / GridManager.Instance.cellSize);
-
-        // Offset by shape half size so it snaps from center visually
         int width = shape.GetLength(0);
         int height = shape.GetLength(1);
-        Vector2Int targetGridPos = new Vector2Int(gridX - (width / 2), gridY - (height / 2));
 
-        if (GridManager.Instance.CanPlaceBlock(shape, targetGridPos))
+        Vector2Int targetGridPos = GridManager.Instance.GetGridPosition(localPoint, width, height);
+
+        bool canPlace = GridManager.Instance.CanPlaceBlock(shape, targetGridPos);
+        if (canPlace)
         {
-            GridManager.Instance.PlaceBlock(shape, targetGridPos);
-            Destroy(gameObject); // Remove from tray
-            BlockSpawner.Instance.BlockPlaced();
+            GridManager.Instance.UpdateGhost(shape, targetGridPos, true, blockSprite);
         }
         else
         {
-            // Return to tray
+            GridManager.Instance.ClearGhost();
+        }
+    }
+
+    public void OnEndDrag(PointerEventData eventData)
+    {
+        canvasGroup.blocksRaycasts = true;
+        canvasGroup.alpha = 1f;
+
+        Vector2 localPoint;
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            GridManager.Instance.gridBackground,
+            Input.mousePosition,
+            null,
+            out localPoint);
+
+        int width = shape.GetLength(0);
+        int height = shape.GetLength(1);
+        Vector2Int targetGridPos = GridManager.Instance.GetGridPosition(localPoint, width, height);
+
+        if (GridManager.Instance.CanPlaceBlock(shape, targetGridPos))
+        {
+            GridManager.Instance.PlaceBlock(shape, targetGridPos, blockSprite);
+            GridManager.Instance.ClearGhost();
+            BlockSpawner.Instance.BlockPlaced(this);
+            Destroy(gameObject); // Remove from tray
+        }
+        else
+        {
+            GridManager.Instance.ClearGhost();
             transform.SetParent(originalParent);
             rect.anchoredPosition = originalPosition;
         }

@@ -1,62 +1,90 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 public class BlockSpawner : MonoBehaviour
 {
     public static BlockSpawner Instance;
     public BlockShapes shapeDatabase;
 
-    public GameObject blockPrefab; // A UI prefab with the DraggableBlock script attached
-    public Transform[] spawnPoints; // 3 spawn points in the tray
+    public GameObject blockPrefab;
+    public Transform[] spawnPoints;
 
-    private int[,] currentShape1;
-    private int[,] currentShape2;
-    private int[,] currentShape3;
-
-    public int blocksRemaining = 3;
+    private List<DraggableBlock> activeBlocks = new List<DraggableBlock>();
 
     void Awake() => Instance = this;
-
     void Start() => SpawnNewBlocks();
 
     public void SpawnNewBlocks()
     {
-        currentShape1 = shapeDatabase.shapes[Random.Range(0, shapeDatabase.shapes.Count)];
-        currentShape2 = shapeDatabase.shapes[Random.Range(0, shapeDatabase.shapes.Count)];
-        currentShape3 = shapeDatabase.shapes[Random.Range(0, shapeDatabase.shapes.Count)];
+        // Clear any old references just in case
+        activeBlocks.Clear();
 
-        CreateBlockVisual(currentShape1, spawnPoints[0]);
-        CreateBlockVisual(currentShape2, spawnPoints[1]);
-        CreateBlockVisual(currentShape3, spawnPoints[2]);
+        SpawnBlockAt(spawnPoints[0]);
+        SpawnBlockAt(spawnPoints[1]);
+        SpawnBlockAt(spawnPoints[2]);
 
-        blocksRemaining = 3;
         CheckGameOver();
     }
 
-    void CreateBlockVisual(int[,] shape, Transform parent)
+    void SpawnBlockAt(Transform parent)
     {
+        int[,] shape = shapeDatabase.shapes[Random.Range(0, shapeDatabase.shapes.Count)];
+
+        // Pick a random image from GameManager
+        Sprite sprite = GameManager.Instance.blockSprites[Random.Range(0, GameManager.Instance.blockSprites.Length)];
+
         GameObject blockObj = Instantiate(blockPrefab, parent);
         DraggableBlock drag = blockObj.GetComponent<DraggableBlock>();
-        drag.SetShape(shape);
+        drag.SetShape(shape, sprite);
+
+        activeBlocks.Add(drag);
     }
 
-    public void BlockPlaced()
+    public void BlockPlaced(DraggableBlock placedBlock)
     {
-        blocksRemaining--;
-        if (blocksRemaining <= 0)
+        if (activeBlocks.Contains(placedBlock))
+        {
+            activeBlocks.Remove(placedBlock);
+        }
+
+        if (activeBlocks.Count <= 0)
         {
             SpawnNewBlocks();
         }
-        CheckGameOver();
+        else
+        {
+            CheckGameOver();
+        }
     }
 
     public void CheckGameOver()
     {
-        // If any of the remaining blocks (in tray) can fit anywhere, game continues
-        // We need a reference to the active blocks. To keep it simple for this guide, 
-        // we check if ALL 3 slots are empty. If not, we assume they can fit unless proven otherwise.
+        // Don't check if we are spawning a new set
+        if (activeBlocks.Count == 0) return;
 
-        // For a robust Game Over, we check the remaining blocks in the tray.
-        // (This requires passing the remaining shapes. For simplicity, we trigger a basic check).
-        Debug.Log("Checking Game State...");
+        bool canPlaceAny = false;
+
+        // Test every active block against every cell on the 8x8 grid
+        for (int x = 0; x < GridManager.Instance.gridSize; x++)
+        {
+            for (int y = 0; y < GridManager.Instance.gridSize; y++)
+            {
+                foreach (DraggableBlock block in activeBlocks)
+                {
+                    if (GridManager.Instance.CanPlaceBlock(block.shape, new Vector2Int(x, y)))
+                    {
+                        canPlaceAny = true;
+                        break; // Found a valid move, no need to check this cell further
+                    }
+                }
+                if (canPlaceAny) break; // Break Y loop
+            }
+            if (canPlaceAny) break; // Break X loop
+        }
+
+        if (!canPlaceAny)
+        {
+            GameManager.Instance.TriggerGameOver();
+        }
     }
 }
