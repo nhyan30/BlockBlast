@@ -45,7 +45,7 @@ public class GridManager : MonoBehaviour
                 GameObject cell = new GameObject($"Cell_{x}_{y}");
                 cell.transform.SetParent(gridBackground, false);
                 RectTransform rt = cell.AddComponent<RectTransform>();
-                rt.sizeDelta = new Vector2(cellSize - 4, cellSize - 4);
+                rt.sizeDelta = new Vector2(cellSize - 4, cellSize - 4); // Default empty size
                 rt.anchoredPosition = new Vector2(startX + (x * cellSize), startY - (y * cellSize));
 
                 Image img = cell.AddComponent<Image>();
@@ -59,7 +59,7 @@ public class GridManager : MonoBehaviour
                 GameObject ghostCell = new GameObject($"Ghost_{x}_{y}");
                 ghostCell.transform.SetParent(gridBackground, false);
                 RectTransform ghostRt = ghostCell.AddComponent<RectTransform>();
-                ghostRt.sizeDelta = new Vector2(cellSize - 4, cellSize - 4);
+                ghostRt.sizeDelta = new Vector2(cellSize + 3, cellSize + 3);
                 ghostRt.anchoredPosition = new Vector2(startX + (x * cellSize), startY - (y * cellSize));
 
                 Image ghostImg = ghostCell.AddComponent<Image>();
@@ -98,6 +98,7 @@ public class GridManager : MonoBehaviour
     {
         int width = shape.GetLength(0);
         int height = shape.GetLength(1);
+        int cellsPlaced = 0;
 
         for (int x = 0; x < width; x++)
         {
@@ -109,11 +110,19 @@ public class GridManager : MonoBehaviour
                     int targetY = gridPos.y + y;
 
                     gridArray[targetX, targetY] = 1;
+
+                    // Update visuals and size to match ghost cell (+2)
                     cellVisuals[targetX, targetY].sprite = blockSprite;
-                    cellVisuals[targetX, targetY].color = Color.white; // Ensure full opacity
+                    cellVisuals[targetX, targetY].color = Color.white;
+                    cellVisuals[targetX, targetY].rectTransform.sizeDelta = new Vector2(cellSize + 3, cellSize + 3);
+
+                    cellsPlaced++;
                 }
             }
         }
+
+        // Add score for placing the block (1 point per cell placed)
+        GameManager.Instance.AddScore(cellsPlaced);
 
         ClearGhost();
         StartCoroutine(ClearLines());
@@ -154,6 +163,7 @@ public class GridManager : MonoBehaviour
                 gridArray[x, y] = 0;
                 cellVisuals[x, y].sprite = emptyCellSprite;
                 cellVisuals[x, y].color = emptyColor;
+                cellVisuals[x, y].rectTransform.sizeDelta = new Vector2(cellSize - 4, cellSize - 4); // Reset size
             }
         }
 
@@ -164,13 +174,17 @@ public class GridManager : MonoBehaviour
                 gridArray[x, y] = 0;
                 cellVisuals[x, y].sprite = emptyCellSprite;
                 cellVisuals[x, y].color = emptyColor;
+                cellVisuals[x, y].rectTransform.sizeDelta = new Vector2(cellSize - 4, cellSize - 4); // Reset size
             }
         }
 
         if (rowsToClear.Count > 0 || colsToClear.Count > 0)
         {
-            int scoreToAdd = (rowsToClear.Count + colsToClear.Count) * 10;
-            if (rowsToClear.Count + colsToClear.Count > 1) scoreToAdd += 20; // Combo bonus
+            int linesCleared = rowsToClear.Count + colsToClear.Count;
+
+            // Original Block Blast scoring formula:
+            // 1 line = 10, 2 lines = 30, 3 lines = 60, 4 lines = 100, 5 lines = 150
+            int scoreToAdd = (10 * linesCleared) + (linesCleared > 1 ? (5 * linesCleared * (linesCleared - 1)) : 0);
 
             GameManager.Instance.AddScore(scoreToAdd);
             yield return new WaitForSeconds(0.2f);

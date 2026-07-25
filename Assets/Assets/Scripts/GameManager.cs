@@ -10,7 +10,11 @@ public class GameManager : MonoBehaviour
     [Header("UI References")]
     public TextMeshProUGUI scoreText;
     public TextMeshProUGUI highScoreText;
+
+    [Header("Game Over Panel")]
     public GameObject gameOverPanel; // A panel with a Restart button
+    public TextMeshProUGUI gameOverScoreText; // Score achieved text on Game Over panel
+    public TextMeshProUGUI gameOverHighScoreText; // High score text on Game Over panel
 
     [Header("Block Settings")]
     public Sprite[] blockSprites; // Drag your block images here in the Inspector
@@ -57,12 +61,20 @@ public class GameManager : MonoBehaviour
             scoreText.text = score.ToString();
 
         if (highScoreText != null)
-            highScoreText.text = "Best: " + highScore.ToString();
+            highScoreText.text = highScore.ToString();
     }
 
     public void TriggerGameOver()
     {
         if (gameOverPanel) gameOverPanel.SetActive(true);
+
+        // Update the Game Over panel texts
+        if (gameOverScoreText != null)
+            gameOverScoreText.text = score.ToString();
+
+        if (gameOverHighScoreText != null)
+            gameOverHighScoreText.text = highScore.ToString();
+
         Debug.Log("Game Over! No moves left.");
     }
 

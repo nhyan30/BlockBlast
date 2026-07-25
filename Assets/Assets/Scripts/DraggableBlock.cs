@@ -44,7 +44,7 @@ public class DraggableBlock : MonoBehaviour, IBeginDragHandler, IDragHandler, IE
                     GameObject cell = new GameObject("BlockCell");
                     cell.transform.SetParent(transform, false);
                     RectTransform rt = cell.AddComponent<RectTransform>();
-                    rt.sizeDelta = new Vector2(cellSize - 6, cellSize - 6);
+                    rt.sizeDelta = new Vector2(cellSize + 3, cellSize + 3);
 
                     float posX = (x * cellSize) - (width * cellSize / 2) + (cellSize / 2);
                     float posY = -(y * cellSize) + (height * cellSize / 2) - (cellSize / 2);
