@@ -11,10 +11,9 @@ public class GridManager : MonoBehaviour
     public float cellSize = 80f;
     public RectTransform gridBackground;
 
-    // 0 = empty, 1 = filled
     public int[,] gridArray;
     public Image[,] cellVisuals;
-    public Image[,] ghostVisuals; // For the drag preview
+    public Image[,] ghostVisuals;
 
     public Sprite emptyCellSprite;
     public Color emptyColor;
@@ -30,6 +29,22 @@ public class GridManager : MonoBehaviour
         CreateGridVisuals();
     }
 
+    public void ClearGrid()
+    {
+        for (int x = 0; x < gridSize; x++)
+        {
+            for (int y = 0; y < gridSize; y++)
+            {
+                gridArray[x, y] = 0;
+                cellVisuals[x, y].sprite = emptyCellSprite;
+                cellVisuals[x, y].color = emptyColor;
+                cellVisuals[x, y].rectTransform.sizeDelta = new Vector2(cellSize - 4, cellSize - 4);
+                ghostVisuals[x, y].enabled = false;
+            }
+        }
+        currentGhostCells.Clear();
+    }
+
     void CreateGridVisuals()
     {
         float totalSize = cellSize * gridSize;
@@ -41,11 +56,10 @@ public class GridManager : MonoBehaviour
         {
             for (int y = 0; y < gridSize; y++)
             {
-                // Base Cell
                 GameObject cell = new GameObject($"Cell_{x}_{y}");
                 cell.transform.SetParent(gridBackground, false);
                 RectTransform rt = cell.AddComponent<RectTransform>();
-                rt.sizeDelta = new Vector2(cellSize - 4, cellSize - 4); // Default empty size
+                rt.sizeDelta = new Vector2(cellSize - 4, cellSize - 4);
                 rt.anchoredPosition = new Vector2(startX + (x * cellSize), startY - (y * cellSize));
 
                 Image img = cell.AddComponent<Image>();
@@ -55,7 +69,6 @@ public class GridManager : MonoBehaviour
                 img.pixelsPerUnitMultiplier = 35;
                 cellVisuals[x, y] = img;
 
-                // Ghost Cell (Preview)
                 GameObject ghostCell = new GameObject($"Ghost_{x}_{y}");
                 ghostCell.transform.SetParent(gridBackground, false);
                 RectTransform ghostRt = ghostCell.AddComponent<RectTransform>();
@@ -63,7 +76,7 @@ public class GridManager : MonoBehaviour
                 ghostRt.anchoredPosition = new Vector2(startX + (x * cellSize), startY - (y * cellSize));
 
                 Image ghostImg = ghostCell.AddComponent<Image>();
-                ghostImg.enabled = false; // Hidden by default
+                ghostImg.enabled = false;
                 ghostVisuals[x, y] = ghostImg;
             }
         }
@@ -110,8 +123,6 @@ public class GridManager : MonoBehaviour
                     int targetY = gridPos.y + y;
 
                     gridArray[targetX, targetY] = 1;
-
-                    // Update visuals and size to match ghost cell (+2)
                     cellVisuals[targetX, targetY].sprite = blockSprite;
                     cellVisuals[targetX, targetY].color = Color.white;
                     cellVisuals[targetX, targetY].rectTransform.sizeDelta = new Vector2(cellSize + 3, cellSize + 3);
@@ -121,8 +132,9 @@ public class GridManager : MonoBehaviour
             }
         }
 
-        // Add score for placing the block (1 point per cell placed)
         GameManager.Instance.AddScore(cellsPlaced);
+
+        if (AudioManager.Instance != null) AudioManager.Instance.Play(SoundType.Place);
 
         ClearGhost();
         StartCoroutine(ClearLines());
@@ -133,7 +145,6 @@ public class GridManager : MonoBehaviour
         List<int> rowsToClear = new List<int>();
         List<int> colsToClear = new List<int>();
 
-        // Check Rows
         for (int y = 0; y < gridSize; y++)
         {
             bool isFull = true;
@@ -144,7 +155,6 @@ public class GridManager : MonoBehaviour
             if (isFull) rowsToClear.Add(y);
         }
 
-        // Check Columns
         for (int x = 0; x < gridSize; x++)
         {
             bool isFull = true;
@@ -155,39 +165,56 @@ public class GridManager : MonoBehaviour
             if (isFull) colsToClear.Add(x);
         }
 
-        // Clear visual and logic
-        foreach (int y in rowsToClear)
-        {
-            for (int x = 0; x < gridSize; x++)
-            {
-                gridArray[x, y] = 0;
-                cellVisuals[x, y].sprite = emptyCellSprite;
-                cellVisuals[x, y].color = emptyColor;
-                cellVisuals[x, y].rectTransform.sizeDelta = new Vector2(cellSize - 4, cellSize - 4); // Reset size
-            }
-        }
-
-        foreach (int x in colsToClear)
-        {
-            for (int y = 0; y < gridSize; y++)
-            {
-                gridArray[x, y] = 0;
-                cellVisuals[x, y].sprite = emptyCellSprite;
-                cellVisuals[x, y].color = emptyColor;
-                cellVisuals[x, y].rectTransform.sizeDelta = new Vector2(cellSize - 4, cellSize - 4); // Reset size
-            }
-        }
-
         if (rowsToClear.Count > 0 || colsToClear.Count > 0)
         {
             int linesCleared = rowsToClear.Count + colsToClear.Count;
-
-            // Original Block Blast scoring formula:
-            // 1 line = 10, 2 lines = 30, 3 lines = 60, 4 lines = 100, 5 lines = 150
             int scoreToAdd = (10 * linesCleared) + (linesCleared > 1 ? (5 * linesCleared * (linesCleared - 1)) : 0);
 
             GameManager.Instance.AddScore(scoreToAdd);
-            yield return new WaitForSeconds(0.2f);
+
+            if (UIManager.Instance != null) UIManager.Instance.ShowComboText(linesCleared);
+            if (AudioManager.Instance != null) AudioManager.Instance.Play(SoundType.Clear);
+
+            // Flash effect before clearing
+            foreach (int y in rowsToClear)
+            {
+                for (int x = 0; x < gridSize; x++)
+                {
+                    cellVisuals[x, y].color = Color.white;
+                }
+            }
+            foreach (int x in colsToClear)
+            {
+                for (int y = 0; y < gridSize; y++)
+                {
+                    cellVisuals[x, y].color = Color.white;
+                }
+            }
+
+            yield return new WaitForSeconds(0.1f); // Let the flash show
+
+            // Actually clear visual and logic
+            foreach (int y in rowsToClear)
+            {
+                for (int x = 0; x < gridSize; x++)
+                {
+                    gridArray[x, y] = 0;
+                    cellVisuals[x, y].sprite = emptyCellSprite;
+                    cellVisuals[x, y].color = emptyColor;
+                    cellVisuals[x, y].rectTransform.sizeDelta = new Vector2(cellSize - 4, cellSize - 4);
+                }
+            }
+
+            foreach (int x in colsToClear)
+            {
+                for (int y = 0; y < gridSize; y++)
+                {
+                    gridArray[x, y] = 0;
+                    cellVisuals[x, y].sprite = emptyCellSprite;
+                    cellVisuals[x, y].color = emptyColor;
+                    cellVisuals[x, y].rectTransform.sizeDelta = new Vector2(cellSize - 4, cellSize - 4);
+                }
+            }
         }
 
         BlockSpawner.Instance.CheckGameOver();
@@ -196,7 +223,6 @@ public class GridManager : MonoBehaviour
     public void UpdateGhost(int[,] shape, Vector2Int gridPos, bool canPlace, Sprite blockSprite)
     {
         ClearGhost();
-
         if (!canPlace) return;
 
         int width = shape.GetLength(0);
@@ -215,7 +241,7 @@ public class GridManager : MonoBehaviour
                     {
                         ghostVisuals[targetX, targetY].enabled = true;
                         ghostVisuals[targetX, targetY].sprite = blockSprite;
-                        ghostVisuals[targetX, targetY].color = new Color(1, 1, 1, 0.5f); // 50% Alpha preview
+                        ghostVisuals[targetX, targetY].color = new Color(1, 1, 1, 0.5f);
                         currentGhostCells.Add(new Vector2Int(targetX, targetY));
                     }
                 }

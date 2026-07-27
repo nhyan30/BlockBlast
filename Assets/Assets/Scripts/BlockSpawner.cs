@@ -14,10 +14,18 @@ public class BlockSpawner : MonoBehaviour
     void Awake() => Instance = this;
     void Start() => SpawnNewBlocks();
 
+    public void ClearBlocks()
+    {
+        foreach (DraggableBlock block in activeBlocks)
+        {
+            if (block != null) Destroy(block.gameObject);
+        }
+        activeBlocks.Clear();
+    }
+
     public void SpawnNewBlocks()
     {
-        // Clear any old references just in case
-        activeBlocks.Clear();
+        ClearBlocks();
 
         SpawnBlockAt(spawnPoints[0]);
         SpawnBlockAt(spawnPoints[1]);
@@ -29,8 +37,6 @@ public class BlockSpawner : MonoBehaviour
     void SpawnBlockAt(Transform parent)
     {
         int[,] shape = shapeDatabase.shapes[Random.Range(0, shapeDatabase.shapes.Count)];
-
-        // Pick a random image from GameManager
         Sprite sprite = GameManager.Instance.blockSprites[Random.Range(0, GameManager.Instance.blockSprites.Length)];
 
         GameObject blockObj = Instantiate(blockPrefab, parent);
@@ -59,12 +65,10 @@ public class BlockSpawner : MonoBehaviour
 
     public void CheckGameOver()
     {
-        // Don't check if we are spawning a new set
         if (activeBlocks.Count == 0) return;
 
         bool canPlaceAny = false;
 
-        // Test every active block against every cell on the 8x8 grid
         for (int x = 0; x < GridManager.Instance.gridSize; x++)
         {
             for (int y = 0; y < GridManager.Instance.gridSize; y++)
@@ -74,12 +78,12 @@ public class BlockSpawner : MonoBehaviour
                     if (GridManager.Instance.CanPlaceBlock(block.shape, new Vector2Int(x, y)))
                     {
                         canPlaceAny = true;
-                        break; // Found a valid move, no need to check this cell further
+                        break;
                     }
                 }
-                if (canPlaceAny) break; // Break Y loop
+                if (canPlaceAny) break;
             }
-            if (canPlaceAny) break; // Break X loop
+            if (canPlaceAny) break;
         }
 
         if (!canPlaceAny)

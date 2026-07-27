@@ -1,6 +1,6 @@
+using System.Collections;
 using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 
 public class GameManager : MonoBehaviour
@@ -12,14 +12,14 @@ public class GameManager : MonoBehaviour
     public TextMeshProUGUI highScoreText;
 
     [Header("Game Over Panel")]
-    public GameObject gameOverPanel; // A panel with a Restart button
-    public TextMeshProUGUI gameOverScoreText; // Score achieved text on Game Over panel
-    public TextMeshProUGUI gameOverHighScoreText; // High score text on Game Over panel
+    public TextMeshProUGUI gameOverScoreText;
+    public TextMeshProUGUI gameOverHighScoreText;
 
     [Header("Block Settings")]
-    public Sprite[] blockSprites; // Drag your block images here in the Inspector
+    public Sprite[] blockSprites;
 
     private int score = 0;
+    private int displayedScore = 0;
     private int highScore = 0;
 
     void Awake()
@@ -27,19 +27,26 @@ public class GameManager : MonoBehaviour
         Instance = this;
         highScore = PlayerPrefs.GetInt("HighScore", 0);
         UpdateScoreUI();
-
-        if (gameOverPanel) gameOverPanel.SetActive(false);
     }
 
     void Update()
     {
-        // Reset High Score and Current Score by pressing Left CTRL + D
+        // Gradual score counting
+        if (displayedScore != score)
+        {
+            int diff = score - displayedScore;
+            int step = Mathf.Max(1, Mathf.Abs(diff) / 10); // Move at least 1, or 10% of diff per frame
+            if (diff > 0) displayedScore += step;
+            else displayedScore -= step;
+
+            if (Mathf.Abs(score - displayedScore) < step) displayedScore = score;
+
+            if (scoreText != null) scoreText.text = displayedScore.ToString();
+        }
+
         if (Input.GetKey(KeyCode.LeftControl) && Input.GetKeyDown(KeyCode.D))
         {
             PlayerPrefs.DeleteKey("HighScore");
-            Debug.Log("Score Data Reset! Reloading Scene...");
-
-            // Reload the scene immediately to restart the game
             SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
         }
     }
@@ -57,30 +64,51 @@ public class GameManager : MonoBehaviour
 
     void UpdateScoreUI()
     {
-        if (scoreText != null)
-            scoreText.text = score.ToString();
-
-        if (highScoreText != null)
-            highScoreText.text = highScore.ToString();
+        if (highScoreText != null) highScoreText.text = highScore.ToString();
     }
 
     public void TriggerGameOver()
     {
-        if (gameOverPanel) gameOverPanel.SetActive(true);
-
-        // Update the Game Over panel texts
-        if (gameOverScoreText != null)
-            gameOverScoreText.text = score.ToString();
-
-        if (gameOverHighScoreText != null)
-            gameOverHighScoreText.text = highScore.ToString();
-
-        Debug.Log("Game Over! No moves left.");
+        StartCoroutine(GameOverRoutine());
     }
 
-    // Call this from a UI Button on your GameOver Panel to restart
+    private IEnumerator GameOverRoutine()
+    {
+        if (AudioManager.Instance != null) AudioManager.Instance.Play(SoundType.GameOver);
+
+        // Show "No Spaces Left" first
+        if (UIManager.Instance != null) UIManager.Instance.ShowNoSpacesLeft();
+
+        yield return new WaitForSeconds(1.5f); // Wait for 1.5 seconds
+
+        if (UIManager.Instance != null) UIManager.Instance.HideNoSpacesLeft();
+
+        // Update Game Over panel texts
+        if (gameOverScoreText != null) gameOverScoreText.text = score.ToString();
+        if (gameOverHighScoreText != null) gameOverHighScoreText.text = highScore.ToString();
+
+        // Tell UIManager to Fade in the Game Over panel
+        if (UIManager.Instance != null) UIManager.Instance.ShowGameOver();
+    }
+
+    // Soft restart - no scene reload
+    public void ResetGameplay()
+    {
+        score = 0;
+        displayedScore = 0;
+        if (scoreText != null) scoreText.text = "0";
+
+        if (GridManager.Instance != null) GridManager.Instance.ClearGrid();
+        if (BlockSpawner.Instance != null)
+        {
+            BlockSpawner.Instance.ClearBlocks();
+            BlockSpawner.Instance.SpawnNewBlocks();
+        }
+    }
+
+    // Kept for compatibility if called from elsewhere
     public void RestartGame()
     {
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        ResetGameplay();
     }
 }
